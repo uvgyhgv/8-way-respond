@@ -1,0 +1,234 @@
+C51 COMPILER V9.54   KEY                                                                   12/22/2025 22:23:06 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE KEY
+OBJECT MODULE PLACED IN .\Objects\Key.obj
+COMPILER INVOKED BY: D:\keil5\C51\BIN\C51.EXE Key.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\Key.lst
+                    -) TABS(2) OBJECT(.\Objects\Key.obj)
+
+line level    source
+
+   1          #include <REGX52.H>
+   2          #include "INTRINS.H"
+   3          
+   4          // 全局变量：存储独立按键/矩阵按键键值
+   5          unsigned char Key_KeyNum, Key_KeyNumber;
+   6          
+   7          // ========== 独立按键读取（仅保留K1、K2） ==========
+   8          unsigned char Key()
+   9          { 
+  10   1        unsigned char Temp = 0;
+  11   1        Temp = Key_KeyNum;
+  12   1        Key_KeyNum = 0;
+  13   1        return Temp;  
+  14   1      }
+  15          
+  16          // ========== 独立按键检测（删除K3、K4，P3.3专属蜂鸣器） ==========
+  17          unsigned char KeyNumber()
+  18          { 
+  19   1        unsigned char KeyNum = 0;
+  20   1        if(P3_1 == 0){KeyNum = 1;}  // K1：开始/暂停抢答（保留）
+  21   1        if(P3_0 == 0){KeyNum = 2;}  // K2：重置状态（保留）
+  22   1        // 删除K3（P3_2）、K4（P3_3），P3_3专属蜂鸣器，避免冲突
+  23   1        return KeyNum;
+  24   1      }
+  25          
+  26          // ========== 独立按键扫描（逻辑不变） ==========
+  27          void Loop_Key()
+  28          { 
+  29   1        static unsigned char LastKey = 0, NowKey = 0;
+  30   1        LastKey = NowKey;
+  31   1        NowKey = KeyNumber();
+  32   1        if(LastKey != 0 && NowKey == 0) // 松开触发
+  33   1        {
+  34   2          Key_KeyNum = LastKey;
+  35   2        } 
+  36   1      }
+  37          
+  38          // ========== 矩阵按键读取（逻辑不变） ==========
+  39          unsigned char Matrix_Key()
+  40          {
+  41   1        unsigned char Temp;
+  42   1        Temp = Key_KeyNumber;
+  43   1        Key_KeyNumber = 0;
+  44   1        return Temp;
+  45   1      }
+  46          
+  47          // ========== 矩阵按键检测（新增S12、S13，匹配行P17~P14、列P13~P10） ==========
+  48          unsigned char MatrixKey()
+  49          {
+  50   1        unsigned char KeyNumber = 0;
+  51   1      
+  52   1        // 行1：P17（R1）→ 拉低P17，检测列P13~P10
+  53   1        P1 = 0xFF;        // 所有引脚置1，清除串扰
+  54   1        P1_7 = 0;         // 拉低行1（P17）
+C51 COMPILER V9.54   KEY                                                                   12/22/2025 22:23:06 PAGE 2   
+
+  55   1        if(P1_3 == 0){KeyNumber = 1;}  // 列1（P13）→ S1=1
+  56   1        if(P1_2 == 0){KeyNumber = 2;}  // 列2（P12）→ S2=2
+  57   1        if(P1_1 == 0){KeyNumber = 3;}  // 列3（P11）→ S3=3
+  58   1        if(P1_0 == 0){KeyNumber = 4;}  // 列4（P10）→ S4=4
+  59   1        P1_7 = 1;         // 恢复行1电平
+  60   1      
+  61   1        // 行2：P16（R2）→ 拉低P16，检测列P13~P10
+  62   1        P1 = 0xFF;
+  63   1        P1_6 = 0;         // 拉低行2（P16）
+  64   1        if(P1_3 == 0){KeyNumber = 5;}  // 列1（P13）→ S5=5
+  65   1        if(P1_2 == 0){KeyNumber = 6;}  // 列2（P12）→ S6=6
+  66   1        if(P1_1 == 0){KeyNumber = 7;}  // 列3（P11）→ S7=7
+  67   1        if(P1_0 == 0){KeyNumber = 8;}  // 列4（P10）→ S8=8
+  68   1        P1_6 = 1;         // 恢复行2电平
+  69   1      
+  70   1        // 行3：P15（R3）→ 拉低P15，检测列P13~P10（新增S12）
+  71   1        P1 = 0xFF;
+  72   1        P1_5 = 0;         // 拉低行3（P15）
+  73   1        if(P1_3 == 0){KeyNumber = 9;}  // 列1（P13）→ S9=9
+  74   1        if(P1_2 == 0){KeyNumber = 10;} // 列2（P12）→ S10=10
+  75   1        if(P1_1 == 0){KeyNumber = 11;} // 列3（P11）→ S11=11
+  76   1        if(P1_0 == 0){KeyNumber = 12;} // 列4（P10）→ S12=12（加时间）
+  77   1        P1_5 = 1;         // 恢复行3电平
+  78   1      
+  79   1        // 行4：P14（R4）→ 拉低P14，检测列P13~P10（新增S13）
+  80   1        P1 = 0xFF;
+  81   1        P1_4 = 0;         // 拉低行4（P14）
+  82   1        if(P1_3 == 0){KeyNumber = 13;} // 列1（P13）→ S13=13（减时间）
+  83   1        // 行4其他列可留空，暂无扩展
+  84   1        P1_4 = 1;         // 恢复行4电平
+  85   1      
+  86   1        return KeyNumber;
+  87   1      }
+  88          
+  89          // ========== 矩阵按键扫描（逻辑不变，自动传递1-13键值） ==========
+  90          void Loop_MatrixKey()
+  91          {
+  92   1        static unsigned char LastKey = 0, NowKey = 0;
+  93   1        LastKey = NowKey;
+  94   1        NowKey = MatrixKey();
+  95   1        if(LastKey != 0 && NowKey == 0)
+  96   1        {
+  97   2          Key_KeyNumber = LastKey; // 传递S1-S13所有键值
+  98   2        }
+  99   1      }
+ 100          
+ 101          
+ 102          
+ 103          
+ 104          
+ 105          //#include <REGX52.H>
+ 106          
+ 107          //// 全局变量：存储独立按键/矩阵按键键值
+ 108          //unsigned char Key_KeyNum, Key_KeyNumber;
+ 109          
+ 110          //// ========== 独立按键读取（原有不变） ==========
+ 111          //unsigned char Key()
+ 112          //{ 
+ 113          //  unsigned char Temp = 0;
+ 114          //  Temp = Key_KeyNum;
+ 115          //  Key_KeyNum = 0;
+ 116          //  return Temp;  
+C51 COMPILER V9.54   KEY                                                                   12/22/2025 22:23:06 PAGE 3   
+
+ 117          //}
+ 118          
+ 119          //// ========== 独立按键检测（原有不变） ==========
+ 120          //unsigned char KeyNumber()
+ 121          //{ 
+ 122          //  unsigned char KeyNum = 0;
+ 123          //  if(P3_1 == 0){KeyNum = 1;}
+ 124          //  if(P3_0 == 0){KeyNum = 2;}
+ 125          //  if(P3_2 == 0){KeyNum = 3;}
+ 126          //  if(P3_3 == 0){KeyNum = 4;}
+ 127          //  return KeyNum;
+ 128          //}
+ 129          
+ 130          //// ========== 独立按键扫描（原有不变） ==========
+ 131          //void Loop_Key()
+ 132          //{ 
+ 133          //  static unsigned char LastKey = 0, NowKey = 0;
+ 134          //  LastKey = NowKey;
+ 135          //  NowKey = KeyNumber();
+ 136          //  if(LastKey != 0 && NowKey == 0) // 松开触发
+ 137          //  {
+ 138          //    Key_KeyNum = LastKey;
+ 139          //  } 
+ 140          //}
+ 141          
+ 142          //// ========== 矩阵按键读取（原有不变） ==========
+ 143          //unsigned char Matrix_Key()
+ 144          //{
+ 145          //  unsigned char Temp;
+ 146          //  Temp = Key_KeyNumber;
+ 147          //  Key_KeyNumber = 0;
+ 148          //  return Temp;
+ 149          //}
+ 150          
+ 151          //// ========== 矩阵按键检测（核心修正：匹配行=P17~P14、列=P13~P10） ==========
+ 152          //unsigned char MatrixKey()
+ 153          //{
+ 154          //  unsigned char KeyNumber = 0;
+ 155          
+ 156          //  // 行1：P17（R1）→ 拉低P17，检测列P13~P10
+ 157          //  P1 = 0xFF;        // 所有引脚置1，清除串扰
+ 158          //  P1_7 = 0;         // 拉低行1（P17）
+ 159          //  if(P1_3 == 0){KeyNumber = 1;}  // 列1（P13）→ S1=1
+ 160          //  if(P1_2 == 0){KeyNumber = 2;}  // 列2（P12）→ S2=2
+ 161          //  if(P1_1 == 0){KeyNumber = 3;}  // 列3（P11）→ S3=3
+ 162          //  if(P1_0 == 0){KeyNumber = 4;}  // 列4（P10）→ S4=4
+ 163          //  P1_7 = 1;         // 恢复行1电平
+ 164          
+ 165          //  // 行2：P16（R2）→ 拉低P16，检测列P13~P10
+ 166          //  P1 = 0xFF;
+ 167          //  P1_6 = 0;         // 拉低行2（P16）
+ 168          //  if(P1_3 == 0){KeyNumber = 5;}  // 列1（P13）→ S5=5
+ 169          //  if(P1_2 == 0){KeyNumber = 6;}  // 列2（P12）→ S6=6
+ 170          //  if(P1_1 == 0){KeyNumber = 7;}  // 列3（P11）→ S7=7
+ 171          //  if(P1_0 == 0){KeyNumber = 8;}  // 列4（P10）→ S8=8
+ 172          //  P1_6 = 1;         // 恢复行2电平
+ 173          
+ 174          //  // 行3：P15（R3）→ 拉低P15，检测列P13~P10
+ 175          //  P1 = 0xFF;
+ 176          //  P1_5 = 0;         // 拉低行3（P15）
+ 177          //  if(P1_3 == 0){KeyNumber = 9;}  // 列1（P13）→ S9=9
+ 178          //  if(P1_2 == 0){KeyNumber = 10;} // 列2（P12）→ S10=10
+C51 COMPILER V9.54   KEY                                                                   12/22/2025 22:23:06 PAGE 4   
+
+ 179          //  if(P1_1 == 0){KeyNumber = 11;} // 列3（P11）→ S11=11
+ 180          //  P1_5 = 1;         // 恢复行3电平
+ 181          
+ 182          //  // 行4：P14（R4）→ 拉低P14，检测列P13~P10（可留空，或扩展其他按键）
+ 183          //  P1 = 0xFF;
+ 184          //  P1_4 = 0;         // 拉低行4（P14）
+ 185          //  // 若有其他按键可在此扩展，暂无则留空
+ 186          //  P1_4 = 1;         // 恢复行4电平
+ 187          
+ 188          //  return KeyNumber;
+ 189          //}
+ 190          
+ 191          //void Loop_MatrixKey()
+ 192          //{
+ 193          //  static unsigned char LastKey = 0, NowKey = 0;
+ 194          //  LastKey = NowKey;
+ 195          //  NowKey = MatrixKey();
+ 196          //  if(LastKey != 0 && NowKey == 0)
+ 197          //  {
+ 198          //    Key_KeyNumber = LastKey; // 自动传递1-11所有键值
+ 199          //  }
+ 200          //}
+ 201          
+ 202          ////这是矩阵按键的封装，引脚为行：P17到P14，列是P13到P10，修改这个矩阵按键的封装，增加S12和S13按键，取代主
+             -函数原本独立按键K3和K4，加减时间的功能，把P3.3引脚单独给蜂鸣器，原本独立按键的加减时间区间功能改为矩阵按键的S12和S13，把
+             -矩阵按键的封装和修改后的主函数都给我
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    159    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      6    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

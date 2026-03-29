@@ -1,0 +1,252 @@
+C51 COMPILER V9.54   MAIN                                                                  03/29/2026 13:59:15 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: D:\keil5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\main.l
+                    -st) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <REGX52.H>
+   2          #include "Timer0.H"
+   3          #include "Key.H"
+   4          #include "Timer1.H"
+   5          #include "INTRINS.H"
+   6          #include "LCD1602.H"
+   7          
+   8          // 蜂鸣器引脚：P3^3（专属，无其他复用）
+   9          sbit Buzzer=P3^3;  
+  10          #define LED_PORT P2       // LED控制端口（P20~P27）
+  11          unsigned char code LED_Index[] = {0,1,2,3,4,5,6,7}; // 选手1-8对应LED引脚位
+  12          unsigned char KeyNum,Sec=3,TimeLock,MemoryTime,UserKey,User;
+  13          bit TimeOutFlag = 0;  
+  14          unsigned char FoulUser = 0;  
+  15          // 记分牌定义
+  16          unsigned char Score[8] = {100,100,100,100,100,100,100,100}; // 8选手初始分数100
+  17          unsigned char SelectUser = 1; // 当前选中的计分选手
+  18          
+  19          void LED_AllOff()
+  20          {
+  21   1          LED_PORT = 0xFF;
+  22   1      }
+  23          
+  24          // 点亮指定选手对应的LED（user:1-8）
+  25          void LED_On(unsigned char user)
+  26          {
+  27   1          if(user >= 1 && user <= 8)
+  28   1          {
+  29   2              LED_PORT &= ~(1 << LED_Index[user-1]); // 对应位清0点亮
+  30   2          }
+  31   1      }
+  32          
+  33          // 蜂鸣器延时函数（500us）
+  34          void Buzzer_Delay500us()    
+  35          {
+  36   1        unsigned char i;
+  37   1        _nop_();
+  38   1        i = 247;
+  39   1        while (--i);
+  40   1      }
+  41          
+  42          // 蜂鸣器发声函数（低电平触发，P3^3专属）
+  43          void Buzzer_Time(unsigned int ms)   
+  44          {
+  45   1        unsigned int i;
+  46   1          Buzzer = 1; // 初始置高，防止电平漂移
+  47   1        for(i=0;i<ms*2;i++)
+  48   1        {
+  49   2          Buzzer=0;       // 低电平触发蜂鸣器发声
+  50   2          Buzzer_Delay500us();
+  51   2          Buzzer=1;       // 高电平停止发声
+  52   2          Buzzer_Delay500us();
+  53   2        }
+  54   1          Buzzer = 1; // 强制置高，确保发声结束后关闭
+C51 COMPILER V9.54   MAIN                                                                  03/29/2026 13:59:15 PAGE 2   
+
+  55   1      }
+  56          
+  57          void main()
+  58          { 
+  59   1        Timer0_Init();
+  60   1        Timer1Init(); 
+  61   1        LCD_Init();
+  62   1          LED_AllOff(); 
+  63   1        MemoryTime=Sec;   
+  64   1          Buzzer = 1; // 初始化蜂鸣器为高电平，避免上电误发声
+  65   1      
+  66   1        while(1)
+  67   1        { 
+  68   2          // LCD显示逻辑
+  69   2          LCD_ShowString(1,1,"Responder:");
+  70   2          LCD_ShowString(2,14,"-");
+  71   2          LCD_ShowNum(2,13,User,1);
+  72   2          LCD_ShowNum(2,15,Sec,2);
+  73   2          // 犯规显示
+  74   2          if(FoulUser != 0)
+  75   2            LCD_ShowNum(1,16,FoulUser,1);
+  76   2          else
+  77   2            LCD_ShowString(1,16," ");
+  78   2          // LCD计分显示
+  79   2          LCD_ShowNum(2,1,SelectUser,1);    // 第二行第1列：当前选中选手编号（1-8）
+  80   2          LCD_ShowNum(2,3,Score[SelectUser-1],3); // 第二行3-5列：对应选手分数（3位）
+  81   2          
+  82   2          // 独立按键处理（仅保留K1、K2）
+  83   2          KeyNum=Key();
+  84   2          if(KeyNum)    
+  85   2          {   
+  86   3            if(KeyNum==1) // K1：开始/暂停抢答
+  87   3            {
+  88   4              TimeLock=~TimeLock;
+  89   4              ET1=1;
+  90   4              Buzzer_Time(500); // 蜂鸣器响500ms
+  91   4              TimeOutFlag = 0;
+  92   4              FoulUser = 0;
+  93   4                      LED_AllOff(); // 开始抢答前熄灭所有LED
+  94   4            }
+  95   3            if(KeyNum==2) // K2：重置所有状态
+  96   3            {
+  97   4              TimeLock=0;
+  98   4              Sec=MemoryTime;
+  99   4              User=0;
+ 100   4              ET1=1;
+ 101   4              TimeOutFlag = 0;
+ 102   4              FoulUser = 0;
+ 103   4                      LED_AllOff(); // 重置时熄灭所有LED
+ 104   4            }
+ 105   3            // 移除K3、K4处理逻辑，功能迁移到矩阵按键S12、S13
+ 106   3          }
+ 107   2          
+ 108   2          // 矩阵按键处理（新增S12、S13）
+ 109   2          UserKey=Matrix_Key();
+ 110   2          if(UserKey)
+ 111   2          {
+ 112   3            // 1. 选手抢答（S1~S8）
+ 113   3            if(User==0 && TimeLock && !TimeOutFlag && UserKey>=1 && UserKey<=8)
+ 114   3            {
+ 115   4              switch(UserKey)   
+ 116   4              { 
+C51 COMPILER V9.54   MAIN                                                                  03/29/2026 13:59:15 PAGE 3   
+
+ 117   5                case 1:{User=1;ET1=0;Buzzer_Time(500);LED_On(1);}break;
+ 118   5                case 2:{User=2;ET1=0;Buzzer_Time(500);LED_On(2);}break;
+ 119   5                case 3:{User=3;ET1=0;Buzzer_Time(500);LED_On(3);}break;
+ 120   5                case 4:{User=4;ET1=0;Buzzer_Time(500);LED_On(4);}break;
+ 121   5                case 5:{User=5;ET1=0;Buzzer_Time(500);LED_On(5);}break;
+ 122   5                case 6:{User=6;ET1=0;Buzzer_Time(500);LED_On(6);}break;
+ 123   5                case 7:{User=7;ET1=0;Buzzer_Time(500);LED_On(7);}break;
+ 124   5                case 8:{User=8;ET1=0;Buzzer_Time(500);LED_On(8);}break;   
+ 125   5              }
+ 126   4            }
+ 127   3            // 2. 犯规抢答（S1~S8）
+ 128   3            else if((!TimeLock || TimeOutFlag) && UserKey>=1 && UserKey<=8)
+ 129   3            {
+ 130   4              FoulUser = UserKey;
+ 131   4              Buzzer_Time(500); // 犯规时蜂鸣器响500ms
+ 132   4            }
+ 133   3            // 3. 计分/时间操作（S9~S13）
+ 134   3            else
+ 135   3            {
+ 136   4              switch(UserKey)
+ 137   4              {
+ 138   5                case 9: // S9：切换选中选手（1-8循环）
+ 139   5                  SelectUser++;
+ 140   5                  if(SelectUser>8) SelectUser=1;
+ 141   5                  break;
+ 142   5                case 10: // S10：当前选手分数+10
+ 143   5                  Score[SelectUser-1] += 10;
+ 144   5                  break;
+ 145   5                case 11: // S11：当前选手分数-10（防止负数）
+ 146   5                  if(Score[SelectUser-1] >= 10)
+ 147   5                    Score[SelectUser-1] -= 10;
+ 148   5                  break;
+ 149   5                case 12: // S12：加时间（取代原K3）
+ 150   5                  if(TimeLock==0 && !TimeOutFlag)
+ 151   5                  {
+ 152   6                    if(Sec<60){Sec++;} 
+ 153   6                    MemoryTime=Sec;
+ 154   6                  }
+ 155   5                  break;
+ 156   5                case 13: // S13：减时间（取代原K4）
+ 157   5                  if(TimeLock==0 && !TimeOutFlag)
+ 158   5                  {
+ 159   6                    if(Sec>0){Sec--;} 
+ 160   6                    MemoryTime=Sec;
+ 161   6                  }
+ 162   5                  break;
+ 163   5              }
+ 164   4            }
+ 165   3          }
+ 166   2        }
+ 167   1      }
+ 168          
+ 169          // 定时器0中断服务函数（按键扫描）
+ 170          void Timer0_Routine() interrupt 1     
+ 171          {
+ 172   1        static unsigned int T0Count1,T0Count2;
+ 173   1        TL0 = 0x18;   
+ 174   1        TH0 = 0xFC;   
+ 175   1        T0Count1++;
+ 176   1        T0Count2++;
+ 177   1        
+ 178   1        if(T0Count2>40)
+C51 COMPILER V9.54   MAIN                                                                  03/29/2026 13:59:15 PAGE 4   
+
+ 179   1        {
+ 180   2          T0Count2=0;
+ 181   2          Loop_MatrixKey(); // 矩阵按键扫描
+ 182   2        } 
+ 183   1      
+ 184   1        if(T0Count1>30)
+ 185   1        {
+ 186   2          T0Count1=0;
+ 187   2          Loop_Key(); // 独立按键扫描
+ 188   2        }
+ 189   1      }
+ 190          
+ 191          // 定时器1中断服务函数（倒计时）
+ 192          void Timer1_Routine() interrupt 3
+ 193          {
+ 194   1        static unsigned int T1Count;
+ 195   1        TL1 = 0xCD;   
+ 196   1        TH1 = 0xD4; 
+ 197   1        if(TimeLock && !TimeOutFlag)
+ 198   1        { 
+ 199   2          T1Count++;
+ 200   2          if(T1Count>=1000)   
+ 201   2          {
+ 202   3            T1Count=0;
+ 203   3            if(Sec>0)
+ 204   3            {
+ 205   4              Sec--;
+ 206   4            }
+ 207   3            else
+ 208   3            {
+ 209   4              TimeOutFlag = 1;    
+ 210   4              ET1 = 0;            
+ 211   4              Buzzer_Time(500);   // 超时蜂鸣器响500ms
+ 212   4              TimeLock = 0;       
+ 213   4                      LED_AllOff(); // 超时后熄灭所有LED
+ 214   4            }
+ 215   3          }
+ 216   2        }
+ 217   1      }
+ 218          
+ 219          
+ 220          
+ 221          
+ 222          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    835    ----
+   CONSTANT SIZE    =     23    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     22    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
